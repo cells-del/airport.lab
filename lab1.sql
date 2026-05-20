@@ -64,6 +64,25 @@ CREATE TABLE flights (
     FOREIGN KEY (tail_number) REFERENCES aircraft(tail_number) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
+DROP TABLE IF EXISTS flights_archive;
+
+CREATE TABLE flights_archive (
+    flight_id INT PRIMARY KEY,
+    flight_number VARCHAR(15) NOT NULL,
+    departure_point VARCHAR(100) NOT NULL,
+    destination_point VARCHAR(100) NOT NULL,
+    departure_time DATETIME NOT NULL,
+    landing_time DATETIME NOT NULL,
+    tail_number VARCHAR(20) NOT NULL,
+    tickets_sold INT DEFAULT 0,
+    status ENUM('Scheduled', 'Performed', 'Cancelled'),
+    CONSTRAINT fk_archive_aircraft
+        FOREIGN KEY (tail_number) REFERENCES aircraft(tail_number)
+);
+
+INSERT INTO flights_archive
+SELECT * FROM flights WHERE status = 'landed' AND landing_time < '2026-01-01';
+
 -- 6. Призначення на рейс
 CREATE TABLE flight_crew_assignments (
     flight_id INT NOT NULL,
@@ -72,7 +91,8 @@ CREATE TABLE flight_crew_assignments (
     FOREIGN KEY (flight_id) REFERENCES flights(flight_id) ON DELETE CASCADE,
     FOREIGN KEY (member_id) REFERENCES crew_members(member_id) ON DELETE RESTRICT
 );
--- Додаємо моделі
+
+
 INSERT INTO aircraft_models (model_name, seats_count, payload_capacity) 
 VALUES ('Boeing 737', 150, 5000), ('Ан-24', 200, 2000), ('Airbus A350', 170, 3000) ;
 
@@ -85,7 +105,9 @@ INSERT INTO crew_members (last_name, birth_date, address, role)
 VALUES 
 ('Шевченко', '1985-05-15', 'Київ, Хрещатик 1', 'pilot'),
 ('Петренко', '1990-08-20', NULL, 'pilot'),
+('Коваленко', '1988-07-22', 'Одеса, Дерибасівська 10', 'pilot'),
 ('Іванова', '1998-03-10', 'Львів, Франка 5', 'stewardess');
+
 
 -- Видаємо ліцензії (Пілот 2 має допуск на Ан-24)
 INSERT INTO pilot_allowed_models (pilot_id, model_id) 
@@ -96,6 +118,9 @@ VALUES
 (1, 2),  -- Шевченко допущений до Ан-24 (модель 2)
 (2, 1),  -- Петренко допущений до Boeing 737 (модель 1)
 (2, 3);  -- Петренко допущений до Airbus A350 (модель 3)
+
+INSERT INTO pilot_allowed_models (pilot_id, model_id)
+VALUES (LAST_INSERT_ID(), 3);
 
 -- Створюємо рейс
 INSERT INTO flights (flight_number, departure_point, destination_point, departure_time, landing_time, tail_number, tickets_sold, status) 
@@ -108,9 +133,88 @@ VALUES
 INSERT INTO flight_crew_assignments (flight_id, member_id) 
 VALUES 
 -- Рейс PS-101 (Kyiv → Lviv)
-(1, 1),  -- Шевченко (pilot)
-(1, 3),  -- Іванова (stewardess)
+ 
+    (1, 1),  -- Шевченко (pilot)
+    (1, 3),  -- Іванова (stewardess)
 
 -- Рейс PS-121 (Kharkiv → Kyiv)
-(2, 2),  -- Петренко (pilot)
-(2, 3);  -- Іванова (stewardess)
+    (2, 2);  -- Петренко (pilot)
+
+-- Тест для перевірки тригера: Іванова вже є на рейсі 1, тому вставка на рейс 2 має викликати помилку.
+INSERT INTO flight_crew_assignments (flight_id, member_id)
+VALUES (2, 3);
+-- ============================================
+-- СЕЛЕКТИ ДЛЯ ПЕРЕГЛЯДУ ДАНИХ
+-- ============================================
+
+-- 1. Моделі літаків
+SELECT 
+    model_id,
+    model_name,
+    seats_count,
+    payload_capacity
+FROM aircraft_models;
+
+-- 2. Літаки з назвою моделі
+SELECT 
+    a.tail_number,
+    am.model_name,
+    a.hours_worked
+FROM aircraft a
+JOIN aircraft_models am ON a.model_id = am.model_id;
+
+-- 3. Члени екіпажу
+SELECT 
+    member_id,
+    last_name,
+    birth_date,
+    COALESCE(address, '—') AS address,
+    role
+FROM crew_members;
+
+-- 4. Ліцензії пілотів (хто на що допущений)
+SELECT 
+    cm.last_name        AS pilot,
+    am.model_name       AS allowed_model
+FROM pilot_allowed_models pam
+JOIN crew_members   cm ON pam.pilot_id  = cm.member_id
+JOIN aircraft_models am ON pam.model_id = am.model_id
+ORDER BY cm.last_name;
+
+-- 5. Рейси з деталями
+SELECT 
+    f.flight_number,
+    f.departure_point,
+    f.destination_point,
+    f.departure_time,
+    f.landing_time,
+    a.tail_number,
+    am.model_name,
+    f.tickets_sold,
+    f.status
+FROM flights f
+JOIN aircraft       a  ON f.tail_number = a.tail_number
+JOIN aircraft_models am ON a.model_id   = am.model_id
+ORDER BY f.departure_time;
+
+-- 6. Призначення екіпажу на рейси
+SELECT 
+    f.flight_number,
+    f.departure_point,
+    f.destination_point,
+    cm.last_name        AS crew_member,
+    cm.role
+FROM flight_crew_assignments fca
+JOIN flights      f  ON fca.flight_id  = f.flight_id
+JOIN crew_members cm ON fca.member_id  = cm.member_id
+ORDER BY f.flight_number, cm.role;
+
+-- 7. Зведена статистика рейсів по місту вильоту (як на скріншоті)
+SELECT 
+    departure_point,
+    SUM(status = 'Scheduled') AS scheduled,
+    SUM(status = 'Performed') AS departed,
+    SUM(status = 'Performed') AS landed,
+    SUM(status = 'Cancelled') AS cancelled
+FROM flights
+GROUP BY departure_point;
