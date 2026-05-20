@@ -1,9 +1,8 @@
 USE airport_db;
 
--- ============================================
--- ЗАВДАННЯ 1: додати поля UCR, DCR, ULC, DLC
--- до всіх таблиць
--- ============================================
+
+-- додати поля UCR, DCR, ULC, DLC до всіх таблиць
+
 
 ALTER TABLE aircraft_models
     ADD COLUMN UCR VARCHAR(100) DEFAULT NULL,
@@ -42,9 +41,9 @@ ALTER TABLE flight_crew_assignments
     ADD COLUMN DLC DATETIME    DEFAULT NULL;
 
 
--- ============================================
+
 -- ТРИГЕРИ UCR/DCR/ULC/DLC для кожної таблиці
--- ============================================
+
 
 -- aircraft_models
 DROP TRIGGER IF EXISTS trg_aircraft_models_insert;
@@ -203,11 +202,9 @@ END$$
 DELIMITER ;
 
 
--- ============================================
--- ЗАВДАННЯ 2: сурогатний ключ для flight_crew_assignments
--- Таблиця має композитний PK — додамо surrogate id
+-- сурогатний ключ для flight_crew_assignments. Таблиця має композитний PK — додамо surrogate id
 -- та тригер для автозаповнення послідовними значеннями
--- ============================================
+
 
 ALTER TABLE flight_crew_assignments
     ADD COLUMN assignment_id INT DEFAULT NULL;
@@ -243,16 +240,7 @@ END$$
 DELIMITER ;
 
 
--- ============================================
--- ЗАВДАННЯ 3: тригери перевірки цілісності
--- ============================================
-
--- ПРОБЛЕМА MUTATING TABLE:
--- Тригер AFTER INSERT на flight_crew_assignments
--- не може читати ту саму таблицю flight_crew_assignments
--- у тілі тригера (mutating table error в Oracle,
--- у MySQL це дозволено, але ми вирішуємо це через
--- допоміжну таблицю-лог конфліктів та BEFORE-тригер)
+--тригери перевірки цілісності
 
 -- Допоміжна таблиця для перевірки (уникаємо mutating table)
 DROP TABLE IF EXISTS crew_schedule_check;
@@ -297,7 +285,7 @@ END$$
 DELIMITER ;
 
 
--- ТРИГЕР 3.1: перерва між вильотами не менше 3 днів
+-- перерва між вильотами не менше 3 днів
 DROP TRIGGER IF EXISTS trg_check_pilot_rest;
 
 DELIMITER $$
@@ -316,7 +304,7 @@ BEGIN
     FROM   flights
     WHERE  flight_id = NEW.flight_id;
 
-    -- Перевіряємо через допоміжну таблицю (не mutating!)
+    -- Перевіряємо через допоміжну таблицю (не mutating)
     -- чи є рейси цього члена екіпажу в межах 3 днів
     SELECT COUNT(*) INTO v_conflict
     FROM crew_schedule_check
@@ -335,7 +323,7 @@ END$$
 DELIMITER ;
 
 
--- ТРИГЕР 3.2: заборона одночасного призначення на кілька рейсів
+-- заборона одночасного призначення на кілька рейсів
 DROP TRIGGER IF EXISTS trg_check_crew_conflict;
 
 DELIMITER $$
@@ -370,10 +358,7 @@ END$$
 
 DELIMITER ;
 
-
--- ============================================
--- ТЕСТ тригерів
--- ============================================
+-- тест тригерів
 
 -- Перевірка UCR/DCR — вставляємо нову модель
 INSERT INTO aircraft_models (model_name, seats_count, payload_capacity)
@@ -387,7 +372,5 @@ WHERE model_name = 'Boeing 777';
 SELECT * FROM flight_crew_assignments;
 
 -- Тест конфлікту розкладу (має дати помилку):
--- Іванова вже на рейсі 1 (2026-06-01), спробуємо додати її на рейс 2
--- який теж 2026-06-02 — менше 3 днів різниці
 INSERT INTO flight_crew_assignments (flight_id, member_id)
 VALUES (2, 3);
