@@ -120,3 +120,74 @@ SELECT
     SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
 FROM flights
 GROUP BY departure_point;
+
+-- Скасувати всі рейси старіші за сьогодні зі статусом scheduled
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE flights
+SET status = 'cancelled'
+WHERE status = 'scheduled' AND departure_time < NOW();
+
+SET SQL_SAFE_UPDATES = 1;
+
+-- Оновити кількість проданих квитків до максимуму місць (овербукінг → обмежити)
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE flights f
+JOIN aircraft a ON f.tail_number = a.tail_number
+JOIN aircraft_models am ON a.model_id = am.model_id
+SET f.tickets_sold = am.seats_count
+WHERE f.tickets_sold > am.seats_count;
+
+SET SQL_SAFE_UPDATES = 1;
+
+INSERT INTO crew_members (last_name, birth_date, address, role)
+VALUES ('Шевченко', '1985-03-15', 'Київ, вул. Хрещатик 1', 'pilot');
+
+-- Архівна таблиця виконаних рейсів (припустимо вона є)
+
+
+SET SQL_SAFE_UPDATES = 0;
+
+DELETE FROM flight_crew_assignments;
+
+SET SQL_SAFE_UPDATES = 1;
+
+-- Видалити призначення екіпажу на скасовані рейси
+SET SQL_SAFE_UPDATES = 0;
+
+DELETE fca FROM flight_crew_assignments fca
+JOIN flights f ON fca.flight_id = f.flight_id
+WHERE f.status = 'cancelled';
+
+-- Складний 1: пілоти з допуском до борту рейсу + завантаженість > 80%
+-- Поєднує: JOIN кількох таблиць, підзапит у WHERE, обчислюване поле, ORDER BY
+SELECT 
+    cm.last_name,
+    am.model_name,
+    fl.flight_number,
+    ROUND(fl.tickets_sold * 100.0 / am.seats_count, 1) AS load_pct
+FROM crew_members cm
+JOIN pilot_allowed_models pam ON cm.member_id = pam.pilot_id
+JOIN aircraft_models am ON pam.model_id = am.model_id
+JOIN aircraft a ON am.model_id = a.model_id
+JOIN flights fl ON a.tail_number = fl.tail_number
+WHERE cm.role = 'pilot'
+AND fl.tickets_sold * 1.0 / am.seats_count > 0.8
+ORDER BY load_pct DESC;
+-- Складний 2: CrossTab + підзапит у FROM — завантаженість борту по місяцях
+SELECT 
+    tail_number,
+    SUM(CASE WHEN month = 1 THEN tickets ELSE 0 END) AS січень,
+    SUM(CASE WHEN month = 2 THEN tickets ELSE 0 END) AS жовтень,
+    SUM(CASE WHEN month = 3 THEN tickets ELSE 0 END) AS червень
+FROM (
+    SELECT 
+        tail_number,
+        MONTH(departure_time) AS month,
+        SUM(tickets_sold) AS tickets
+    FROM flights
+    WHERE YEAR(departure_time) = 2026
+    GROUP BY tail_number, MONTH(departure_time)
+) AS monthly
+GROUP BY tail_number;
