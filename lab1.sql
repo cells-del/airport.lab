@@ -2,7 +2,7 @@ DROP DATABASE IF EXISTS airport_db;
 CREATE DATABASE airport_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE airport_db;
 
--- 1. Таблиця моделей літаків
+--  Таблиця моделей літаків
 CREATE TABLE aircraft_models (
     -- Сурогатний ключ на основі послідовності (AUTO_INCREMENT)
     model_id INT AUTO_INCREMENT PRIMARY KEY, 
@@ -14,7 +14,7 @@ CREATE TABLE aircraft_models (
     payload_capacity INT NOT NULL CHECK (payload_capacity > 0)                 
 );
 
--- 2. Таблиця літаків
+-- Таблиця літаків
 CREATE TABLE aircraft (
     -- Природний первинний ключ (не сурогатний)
     tail_number VARCHAR(20) PRIMARY KEY,          
@@ -25,7 +25,7 @@ CREATE TABLE aircraft (
     FOREIGN KEY (model_id) REFERENCES aircraft_models(model_id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- 3. Таблиця екіпажу
+-- Таблиця екіпажу
 CREATE TABLE crew_members (
     member_id INT AUTO_INCREMENT PRIMARY KEY,
     last_name VARCHAR(100) NOT NULL,              
@@ -37,7 +37,7 @@ CREATE TABLE crew_members (
     CHECK (birth_date < '2008-01-01')
 );
 
--- 4. Ліцензії пілотів
+-- Ліцензії пілотів
 CREATE TABLE pilot_allowed_models (
     pilot_id INT NOT NULL,
     model_id INT NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE pilot_allowed_models (
     FOREIGN KEY (model_id) REFERENCES aircraft_models(model_id) ON DELETE CASCADE
 );
 
--- 5. Таблиця рейсів
+-- Таблиця рейсів
 CREATE TABLE flights (
     flight_id INT AUTO_INCREMENT PRIMARY KEY,
     flight_number VARCHAR(15) NOT NULL UNIQUE,           
@@ -83,7 +83,7 @@ CREATE TABLE flights_archive (
 INSERT INTO flights_archive
 SELECT * FROM flights WHERE status = 'landed' AND landing_time < '2026-01-01';
 
--- 6. Призначення на рейс
+-- Призначення на рейс
 CREATE TABLE flight_crew_assignments (
     flight_id INT NOT NULL,
     member_id INT NOT NULL,
@@ -143,11 +143,11 @@ VALUES
 -- Тест для перевірки тригера: Іванова вже є на рейсі 1, тому вставка на рейс 2 має викликати помилку.
 INSERT INTO flight_crew_assignments (flight_id, member_id)
 VALUES (2, 3);
--- ============================================
--- СЕЛЕКТИ ДЛЯ ПЕРЕГЛЯДУ ДАНИХ
--- ============================================
 
--- 1. Моделі літаків
+-- СЕЛЕКТИ ДЛЯ ПЕРЕГЛЯДУ ДАНИХ
+
+
+-- Моделі літаків
 SELECT 
     model_id,
     model_name,
@@ -155,7 +155,7 @@ SELECT
     payload_capacity
 FROM aircraft_models;
 
--- 2. Літаки з назвою моделі
+--  Літаки з назвою моделі
 SELECT 
     a.tail_number,
     am.model_name,
@@ -163,7 +163,7 @@ SELECT
 FROM aircraft a
 JOIN aircraft_models am ON a.model_id = am.model_id;
 
--- 3. Члени екіпажу
+-- Члени екіпажу
 SELECT 
     member_id,
     last_name,
@@ -172,7 +172,7 @@ SELECT
     role
 FROM crew_members;
 
--- 4. Ліцензії пілотів (хто на що допущений)
+-- Ліцензії пілотів (хто на що допущений)
 SELECT 
     cm.last_name        AS pilot,
     am.model_name       AS allowed_model
@@ -181,7 +181,7 @@ JOIN crew_members   cm ON pam.pilot_id  = cm.member_id
 JOIN aircraft_models am ON pam.model_id = am.model_id
 ORDER BY cm.last_name;
 
--- 5. Рейси з деталями
+-- Рейси з деталями
 SELECT 
     f.flight_number,
     f.departure_point,
@@ -197,7 +197,7 @@ JOIN aircraft       a  ON f.tail_number = a.tail_number
 JOIN aircraft_models am ON a.model_id   = am.model_id
 ORDER BY f.departure_time;
 
--- 6. Призначення екіпажу на рейси
+-- Призначення екіпажу на рейси
 SELECT 
     f.flight_number,
     f.departure_point,
@@ -209,7 +209,7 @@ JOIN flights      f  ON fca.flight_id  = f.flight_id
 JOIN crew_members cm ON fca.member_id  = cm.member_id
 ORDER BY f.flight_number, cm.role;
 
--- 7. Зведена статистика рейсів по місту вильоту (як на скріншоті)
+-- Зведена статистика рейсів по місту вильоту (як на скріншоті)
 SELECT 
     departure_point,
     SUM(status = 'Scheduled') AS scheduled,
